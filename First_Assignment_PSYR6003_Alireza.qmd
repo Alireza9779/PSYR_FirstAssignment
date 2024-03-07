@@ -1,0 +1,349 @@
+---
+title: "PSYR6003_first_assignment"
+format: html
+author: Alireza
+---
+
+## **Cloning the repo for the assignment**
+
+```{r}
+#if you run it once before rendering please put # to make them deactive
+install.packages("git2r")
+library(git2r)
+repo_url <- "https://github.com/iyakoven/PSYR6003-Assignment-1.git"
+dest_path <- "/Users/alireza/Desktop/Rclass/first_assignment"
+repo <- git2r::clone(url = repo_url, local_path = dest_path)
+
+
+
+```
+
+## importing and inspecting the data set for any missing or unusual values
+
+```{r}
+# Import the dataset
+avengers <- read.csv('/Users/alireza/Desktop/Rclass/first_assignment/avengers.csv')
+
+# Inspect the dataset
+head(avengers)
+summary(avengers)
+
+# Check for missing values
+colSums(is.na(avengers))
+
+# extra step for a more visual inspection:)
+library(ggplot2)
+missing_values <- sapply(avengers, function(x) sum(is.na(x)))
+missing_data_frame <- data.frame(Variable = names(missing_values), MissingValues = missing_values)
+ggplot(missing_data_frame, aes(x=Variable, y=MissingValues)) +
+  geom_bar(stat="identity", fill="steelblue") +
+  theme_minimal() +
+  labs(x="Variable", y="Number of Missing Values", title="Missing Values per Variable") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Rotate x-axis labels for better readability
+
+```
+
+## Subseting the data to include only complete cases and creating ‘CombatEffectiveness’ which consists of a sum of agility, speed, strength and willpower.
+
+```{r}
+# Subset the data to include only complete, clean cases and check again for any remained missing values 
+clean_avengers <- na.omit(avengers)
+colSums(is.na(clean_avengers))
+
+# Create a new custom variable 'CombatEffectiveness'
+# It's a sum of agility, speed, strength, and willpower
+clean_avengers$CombatEffectiveness <- rowSums(clean_avengers[, c("agility", "speed", "strength", "willpower")])
+```
+
+## including only the avengers who did not have a superpower and have died
+
+```{r}
+# load necessary packages
+library(tidyverse) # To load the entire tidyverse, including dplyr
+
+# filter the dataset to include only the avengers who did not have a superpower and have died
+filtered_avengers <- clean_avengers %>% 
+  filter(superpower == "no", died == "yes")
+```
+
+## Creating a new copy of data set in .csv and .sav
+
+```{r}
+# Export to CSV
+write.csv(filtered_avengers, "filtered_avengers.csv", row.names = FALSE)
+
+# For SPSS export, we need the haven package
+library(haven)
+write_sav(filtered_avengers, "filtered_avengers.sav")
+```
+
+## summerize CombatEffectiveness, kills, and injuries
+
+```{r}
+summary_stats <- filtered_avengers %>%
+  summarise(
+    Mean_CombatEffectiveness = mean(CombatEffectiveness, na.rm = TRUE),
+    SD_CombatEffectiveness = sd(CombatEffectiveness, na.rm = TRUE),
+    Range_CombatEffectiveness = max(CombatEffectiveness, na.rm = TRUE) - min(CombatEffectiveness, na.rm = TRUE),
+    Mean_Kills = mean(kills, na.rm = TRUE),
+    SD_Kills = sd(kills, na.rm = TRUE),
+    Range_Kills = max(kills, na.rm = TRUE) - min(kills, na.rm = TRUE),
+    Mean_Injuries = mean(injuries, na.rm = TRUE),
+    SD_Injuries = sd(injuries, na.rm = TRUE),
+    Range_Injuries = max(injuries, na.rm = TRUE) - min(injuries, na.rm = TRUE)
+  )
+
+print(summary_stats)
+```
+
+## Calculate mean, SD, and range for CombatEffectiveness, kills, and injuries based on battlefield location (north vs. south)
+
+```{r}
+#Calculate mean, SD, and range for CombatEffectiveness, kills, and injuries based on battlefield location (north vs. south)
+location_stats <- filtered_avengers %>% 
+  group_by(north_south) %>% 
+  summarise(
+    Mean_CombatEffectiveness = mean(CombatEffectiveness, na.rm = TRUE),
+    SD_CombatEffectiveness = sd(CombatEffectiveness, na.rm = TRUE),
+    Range_CombatEffectiveness = max(CombatEffectiveness, na.rm = TRUE) - min(CombatEffectiveness, na.rm = TRUE),
+    Mean_Kills = mean(kills, na.rm = TRUE),
+    SD_Kills = sd(kills, na.rm = TRUE),
+    Range_Kills = max(kills, na.rm = TRUE) - min(kills, na.rm = TRUE),
+    Mean_Injuries = mean(injuries, na.rm = TRUE),
+    SD_Injuries = sd(injuries, na.rm = TRUE),
+    Range_Injuries = max(injuries, na.rm = TRUE) - min(injuries, na.rm = TRUE),
+    Total_Injuries = sum(injuries, na.rm = TRUE) # Using sum to get total injuries
+  )
+summary(location_stats)
+print(location_stats)
+```
+
+## 
+Determining which battlefield was the most effective in combat and Which battlefield had the most injuries
+
+```{r}
+library(dplyr)
+
+# Calculate mean CombatEffectiveness and total injuries by battlefield
+battlefield_stats <- filtered_avengers %>%
+  group_by(north_south) %>%
+  summarise(
+    Mean_CombatEffectiveness = mean(CombatEffectiveness, na.rm = TRUE),
+    Total_Injuries = sum(injuries, na.rm = TRUE) # Using sum to get total injuries
+  )
+
+# Determine which battlefield was the most effective in combat
+most_effective_battlefield <- battlefield_stats %>%
+  arrange(desc(Mean_CombatEffectiveness)) %>%
+  slice(1) %>%
+  pull(north_south)
+
+# Determine which battlefield had the most injuries
+most_injuries_battlefield <- battlefield_stats %>%
+  arrange(desc(Total_Injuries)) %>%
+  slice(1) %>%
+  pull(north_south)
+
+# Print the results
+cat("The most effective battlefield in combat was:", most_effective_battlefield, "\n")
+cat("The battlefield with the most injuries was:", most_injuries_battlefield, "\n")
+
+print(battlefield_stats)
+```
+
+## extra step for visualization ;)
+
+```{r}
+# extra visualization step for Total injuries and CombatEffectiveness
+ggplot(location_stats, aes(x = north_south, y = Total_Injuries, fill = north_south)) +
+  geom_bar(stat = "summary", fun = "mean", position = "dodge") +
+  labs(title = "Mean Total Injuries by Battlefield",
+       x = "Battlefield Location",
+       y = "Mean Total Injuries") +
+  scale_fill_manual(values = c("north" = "blue", "south" = "red")) +
+  theme_minimal()
+
+ggplot(location_stats, aes(x = north_south, y = Mean_CombatEffectiveness, fill = north_south)) +
+  geom_bar(stat = "summary", fun = "mean", position = "dodge") +
+  labs(title = "Mean CombatEffectiveness by Battlefield",
+       x = "Battlefield Location",
+       y = "Mean CombatEffectiveness") +
+  scale_fill_manual(values = c("north" = "blue", "south" = "red")) +
+  theme_minimal()
+
+```
+
+## Which of the three variables you worked on (combat effectiveness, kills, and injuries) is the most erroneous in your mean model?
+
+```{r}
+#calculate and compare the coefficient of variation (CV) for CombatEffectiveness, kills, and injuries
+calculate_CV <- function(data, variable_name) {
+  mean_value <- mean(data[[variable_name]], na.rm = TRUE)
+  sd_value <- sd(data[[variable_name]], na.rm = TRUE)
+  cv <- sd_value / mean_value
+  return(cv)
+}
+
+cv_combat_effectiveness <- calculate_CV(filtered_avengers, "CombatEffectiveness")
+cv_kills <- calculate_CV(filtered_avengers, "kills")
+cv_injuries <- calculate_CV(filtered_avengers, "injuries")
+
+# Compare the CVs
+cv_data <- data.frame(
+  Variable = c("CombatEffectiveness", "kills", "injuries"),
+  CV = c(cv_combat_effectiveness, cv_kills, cv_injuries)
+)
+
+# Printing the CVs for comparison
+print(cv_data)
+
+# Find the row in cv_data with the highest CV
+max_cv_row <- cv_data[which.max(cv_data$CV), ]
+
+# Print a sentence regarding which variable has the highest CV
+cat(max_cv_row$Variable, "has the highest coefficient of variation (CV) at", max_cv_row$CV, ", making it the most variable (or 'erroneous') in terms of its contribution to the mean model.\n")
+
+```
+
+## Secondary analysis for my data, starting with separating avengers to with/without superpower groups and calculating mean and sd of each group for their IQs
+
+```{r}
+
+# Number of Avengers with and without superpowers
+num_with_superpowers <- sum(clean_avengers$superpower == 'yes', na.rm = TRUE)
+num_without_superpowers <- sum(clean_avengers$superpower == 'no', na.rm = TRUE)
+# Calculate standard deviation of IQ for Avengers with and without superpowers
+sd_iq_with_superpowers <- sd(clean_avengers$iq[clean_avengers$superpower == 'yes'], na.rm = TRUE)
+sd_iq_without_superpowers <- sd(clean_avengers$iq[clean_avengers$superpower == 'no'], na.rm = TRUE)
+
+# Calculate mean IQ for Avengers with and without superpowers 
+mean_iq_with_superpowers <- mean(clean_avengers$iq[clean_avengers$superpower == 'yes'], na.rm = TRUE)
+mean_iq_without_superpowers <- mean(clean_avengers$iq[clean_avengers$superpower == 'no'], na.rm = TRUE)
+
+# Calculate SEM for both groups
+sem_iq_with_superpowers <- sd_iq_with_superpowers / sqrt(num_with_superpowers)
+sem_iq_without_superpowers <- sd_iq_without_superpowers / sqrt(num_without_superpowers)
+
+
+
+# Display the number of participants in each group
+num_with_superpowers
+num_without_superpowers
+
+# creating a DataFrame to include Superpower status, Number of Avengers, their average IQ, and SD of IQ
+superpower_iq_summary <- data.frame(
+  Superpower_Status = c("With Superpowers", "Without Superpowers"),
+  Number = c(num_with_superpowers, num_without_superpowers),
+  Average_IQ = c(mean_iq_with_superpowers, mean_iq_without_superpowers),
+  SD_IQ = c(sd_iq_with_superpowers, sd_iq_without_superpowers),
+  SEM_IQ = c(sem_iq_with_superpowers, sem_iq_without_superpowers)
+  
+)
+
+# Print the updated DataFrame
+print(superpower_iq_summary)
+
+```
+
+## Doing a power analysis for the proposed study using my chosen estimate target effect size which is 0.5 (medium effect size).
+
+```{r}
+# Load the pwr package
+library(pwr)
+
+
+# Perform power analysis
+pwr_result <- pwr.t.test(d = 0.5, # medium effect size
+                         sig.level = 0.05, # significance level
+                         power = 0.80, # desired power
+                         type = "two.sample", # type of t-test
+                         alternative = "two.sided" # test for either direction
+)
+
+# Display the power analysis results
+print(pwr_result)
+
+```
+
+## Changing the chosen effect size to 0.8 since we don't have enough samples for previous chosen effect size
+
+```{r}
+# Perform power analysis
+pwr_result <- pwr.t.test(d = 0.8, # medium effect size
+                         sig.level = 0.05, # significance level
+                         power = 0.80, # desired power
+                         type = "two.sample", # type of t-test
+                         alternative = "two.sided" # test for either direction
+)
+
+# Display the power analysis results
+print(pwr_result)
+```
+
+## have enough power to confirm if there truly is no difference between the groups (zero effect)
+
+since i didn't get the point that for this section whether the power estimation required or estimating enough sample size to do that?! So, i did this twice once for estimating proper sample size and once for power value :/
+
+```{r}
+# estimating required samples for seeing no differences 
+#install.packages("TOSTER") 
+library(TOSTER)
+powerTOSTtwo(alpha= 0.05, statistical_power= 0.80, low_eqbound_d= -1, high_eqbound_d=1)
+```
+
+```{r}
+# estimating needed power for showing there is no differences based on real sample size (also i did this step twice due to unequal number of samples in each group)
+
+#since the number of samples are not equal in w/wo superpower groups
+n <- min(num_with_superpowers, num_without_superpowers)
+power_result_current <- pwr.t.test(d = 0.1, sig.level = 0.05, n = n, type = "two.sample", alternative = "two.sided")
+print(power_result_current)
+
+
+#with considering unequal samples size
+n2 <- sum(num_with_superpowers, num_without_superpowers)
+power_result_current2 <- pwr.t2n.test(d = 0.1, sig.level = 0.05, n1 = num_with_superpowers, n2 = num_without_superpowers, alternative = "two.sided")
+print(power_result_current2)
+```
+
+## calculate and report a relevant effect size including a 95% CI for the effect by considering that i already know the t-test value (4.25)
+
+i did this step also twice (since i found that i don't need t value for estimating cohen's d) once with considering the original calculation for cohen's d which is d = (M1 - M2)/sp where: M1​ and M2 are the means of the two groups and sp is the pooled standard deviation and once with
+
+```{r}
+
+# Install and load the effectsize package if not already installed
+if (!requireNamespace("effectsize", quietly = TRUE)) install.packages("effectsize")
+library(effectsize)
+
+# Assuming you have a t-test statistic; for example:
+t_statistic = 4.25
+n1 = 32  # Sample size for group 1 (with superpowers)
+n2 = 780  # Sample size for group 2 (without superpowers)
+
+# Use the t_to_d function to convert the t statistic to Cohen's d
+# and calculate the 95% CI
+df_error <- n1 + n2 - 2
+
+# Now, include df_error in the t_to_d function call
+effect_size <- t_to_d(t = t_statistic, n1 = n1, n2 = n2, df_error = df_error, paired = FALSE, ci = 0.95)
+
+
+# Print the effect size (Cohen's d) and its 95% CI
+print(effect_size)
+
+# For qualitative interpretation, you can use Cohen's conventions:
+# Small effect size: d = 0.2
+# Medium effect size: d = 0.5
+# Large effect size: d = 0.8
+# Adjust the labels based on the calculated effect size
+if (effect_size$d < 0.2) {
+  effect_label = "Small"
+} else if (effect_size$d < 0.5) {
+  effect_label = "Medium"
+} else {
+  effect_label = "Large"
+}
+
+cat("The qualitative label for the effect size is:", effect_label, "\n")
+```
